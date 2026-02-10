@@ -28,7 +28,11 @@ jobs:
           pip install requests
 
       - name: Run update script
-        run: python scripts/update_db.py
+        # GitHub Secret에서 키를 가져와 환경 변수로 주입합니다.
+        env:
+          DATA_API_KEY: ${{ secrets.DATA_API_KEY }}
+        # -u 옵션은 출력을 버퍼링하지 않고 즉시 화면에 보여줍니다.
+        run: python -u scripts/update_db.py
 
       - name: Commit and push changes
         run: |
