@@ -98,13 +98,13 @@ export default function App() {
                 <Microscope className="w-3 h-3 md:w-4 md:h-4 mr-2" />
                 @acedoctor2026
               </div>
-              <h1 className="text-3xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight break-keep">
-                약값도 자산이다.<br/>
-                <span className="text-medical-500">현명한 약-테크 시작하기</span>
+              <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                새는 돈 막아주는<br/>
+                <span className="text-medical-500">현명한 약값 재테크</span>
               </h1>
-              <p className="text-base md:text-xl text-slate-600 max-w-xl mx-auto break-keep leading-relaxed">
-                "성분은 같은데 가격은 왜 다를까요?"<br className="hidden md:block"/>
-                빅데이터로 분석한 <span className="font-bold text-slate-800">최저가 처방 포트폴리오</span>를 제안합니다.
+              <p className="text-xl text-slate-600 max-w-xl mx-auto">
+                "성분은 같은데 가격은 왜 다를까요?"<br/>
+                빅데이터로 분석한 최저가 포트폴리오.
               </p>
             </div>
 
