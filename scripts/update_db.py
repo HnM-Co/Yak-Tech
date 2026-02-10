@@ -2,11 +2,14 @@ import json
 import requests
 import os
 import time
+import sys
 from datetime import datetime
+
+# 로그 즉시 출력을 위해 버퍼링 해제
+sys.stdout.reconfigure(line_buffering=True)
 
 # [건강보험심사평가원_약제급여목록정보]
 # GitHub Secrets에서 'DATA_API_KEY'를 가져옵니다.
-# 보안을 위해 소스코드에는 더 이상 API Key를 남기지 않습니다.
 API_KEY = os.environ.get("DATA_API_KEY", "")
 
 # 호환성을 위해 http 사용
@@ -18,22 +21,39 @@ def fetch_real_price_data():
     num_of_rows = 100 
     MAX_SAFETY_PAGES = 1000 
     
-    print(f"[{datetime.now()}] Starting MONTHLY FULL data collection...", flush=True)
+    print(f"[{datetime.now()}] Script Started. Initializing...", flush=True)
 
     # API Key 누락 확인
     if not API_KEY:
         print(">> CRITICAL ERROR: API Key is missing!", flush=True)
         print(">> Please set 'DATA_API_KEY' in GitHub Repository Settings > Secrets > Actions.", flush=True)
-        # 키가 없으면 바로 종료
         return []
     
-    # 키 마스킹 처리하여 로그 출력 (보안 확인용)
+    # 키 마스킹 처리하여 로그 출력
     masked_key = API_KEY[:4] + "****" + API_KEY[-4:] if len(API_KEY) > 8 else "****"
-    print(f"Using API Key from Secrets: {masked_key}", flush=True)
+    print(f"Using API Key: {masked_key}", flush=True)
     print(f"Target URL: {BASE_URL}", flush=True)
+    print("-------------------------------------------------------", flush=True)
+
+    # 연결 테스트 (1페이지만 가볍게 찔러보기)
+    print(">> Testing connection to data.go.kr...", flush=True)
+    try:
+        test_params = {
+            "serviceKey": requests.utils.unquote(API_KEY), 
+            "numOfRows": 1, 
+            "pageNo": 1, 
+            "type": "json"
+        }
+        test_res = requests.get(BASE_URL, params=test_params, timeout=5)
+        if test_res.status_code == 200:
+            print(">> Connection Successful! Starting full collection.", flush=True)
+        else:
+            print(f">> Connection Warning: Status {test_res.status_code}", flush=True)
+    except Exception as e:
+        print(f">> Connection Failed (Possible IP Block or Timeout): {e}", flush=True)
+        return []
 
     while page <= MAX_SAFETY_PAGES:
-        # requests 라이브러리가 params를 인코딩하므로, Decoding된 키를 넣는 것이 정석입니다.
         params = {
             "serviceKey": requests.utils.unquote(API_KEY), 
             "numOfRows": num_of_rows, 
@@ -42,44 +62,32 @@ def fetch_real_price_data():
         }
 
         try:
-            response = requests.get(BASE_URL, params=params, timeout=15)
+            # 타임아웃 5초로 단축 (해외 접속 차단 시 빨리 실패하도록)
+            response = requests.get(BASE_URL, params=params, timeout=5)
             
-            # 응답 상태 코드 확인
             if response.status_code != 200:
                 print(f"!!! HTTP Error {response.status_code} on Page {page} !!!", flush=True)
-                print(f"Response Body: {response.text[:500]}", flush=True)
                 break
 
-            # JSON 파싱 시도
             try:
                 data = response.json()
-                
-                # 심평원 API는 JSON 내부에도 resultCode가 있을 수 있음
                 header = data.get('header', {})
                 if header and header.get('resultCode') not in ['00', '200']:
                     print(f">> API Logic Error: {header.get('resultMsg')}", flush=True)
                     break
                     
             except json.JSONDecodeError:
-                # 여기가 바로 'JSON Decode Error'가 발생하는 지점입니다.
                 print(f"!!! Critical Error on Page {page}: Response is NOT JSON !!!", flush=True)
                 print("---------------- SERVER RESPONSE (RAW) ----------------", flush=True)
-                # 서버가 보낸 내용을 그대로 출력합니다. 이 내용을 보면 원인을 알 수 있습니다.
-                print(response.text[:1000], flush=True)
+                print(response.text[:500], flush=True) # 너무 길면 짤라서 출력
                 print("-------------------------------------------------------", flush=True)
-                
-                print(">> Stop collection immediately to prevent infinite errors.", flush=True)
+                print(">> Stop collection immediately.", flush=True)
                 break
 
-            # 데이터 추출
             items = data.get('body', {}).get('items', [])
             
-            if items is None:
-                print(f"Page {page}: Items is null (End of Data or Error).", flush=True)
-                break
-
             if not items:
-                print(f"Page {page}: No more items found. Finishing collection.", flush=True)
+                print(f"Page {page}: No more items found (Empty List). Finishing.", flush=True)
                 break
             
             for item in items:
@@ -108,17 +116,21 @@ def fetch_real_price_data():
                 all_drugs.append(drug)
             
             if page % 10 == 0:
-                print(f"Page {page} done. Current Total: {len(all_drugs)}", flush=True)
+                print(f"Page {page} done. Total: {len(all_drugs)}", flush=True)
             
             page += 1
+            # 과도한 요청 방지용 딜레이
             time.sleep(0.05) 
             
+        except requests.exceptions.Timeout:
+            print(f"!!! Timeout on Page {page} (Server slow or IP blocked) !!!", flush=True)
+            break
         except Exception as e:
             print(f"System Error on page {page}: {e}", flush=True)
             break
             
     if len(all_drugs) == 0:
-        print(">> No drugs collected. Check the logs above for server errors.", flush=True)
+        print(">> No drugs collected. Check the logs above.", flush=True)
 
     return all_drugs
 
